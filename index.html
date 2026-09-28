@@ -326,7 +326,7 @@
         <div class="seg" id="impSeg" style="margin-bottom:2px"><button data-imp="journal" class="on">저널</button><button data-imp="expense">가계부</button></div>
         <p id="impHint" style="margin:0"></p>
         <textarea id="impBox" rows="4" placeholder="여기에 시트 내용 붙여넣기 (Ctrl+V)"></textarea>
-        <div class="row2"><button class="mini accent" id="impRun">가져오기</button><button class="mini" id="impFetch">시트에서 직접 불러오기(실험적)</button></div>
+        <div class="row2"><button class="mini accent" id="impRun">붙여넣기 가져오기</button><button class="mini" id="impFetch">📥 시트에서 한번에 불러오기</button></div>
       </div>
     </section>
 
@@ -619,6 +619,15 @@
 "    return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);",
 "  }catch(err){ return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(err)})).setMimeType(ContentService.MimeType.JSON); }",
 "  finally{ lock.releaseLock(); }",
+"}",
+"function doGet(e){",
+"  var out={journal:[],expense:[]};",
+"  try{",
+"    var ss=SpreadsheetApp.openById(SHEET_ID);",
+"    var j=journalSheet_(ss);",
+"    if(j.hr){ var last=j.sh.getLastRow(); if(last>=j.hr){ out.journal=j.sh.getRange(j.hr,j.dc,last-j.hr+1,9).getValues(); } }",
+"  }catch(err){ out.error=String(err); }",
+"  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);",
 "}"].join("\n");
   function fillSettings(){$("#sheetUrl").value=loadSettings().sheetUrl||"";updateSheetPill()}
   function updateSheetPill(){var on=!!(loadSettings().sheetUrl||"").trim();var p=$("#sheetPill");p.textContent=on?"연결됨":"미연결";p.className="pill "+(on?"ok":"off")}
