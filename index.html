@@ -755,12 +755,22 @@
   function isIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1)}
   function updateInstallCard(){
     var dismissed=false;try{dismissed=LS.getItem("mm.installDismissed")==="1"}catch(e){}
-    var can=!isStandalone()&&!dismissed&&(deferredPrompt||isIOS());
+    var can=!isStandalone()&&!dismissed;
     $("#installCard").classList.toggle("show",!!can);
+  }
+  function isInApp(){return /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent)}
+  function showAndroidGuide(){
+    $("#drawerTitle").textContent="홈 화면에 추가하기";
+    var ua=navigator.userAgent, samsung=/SamsungBrowser/i.test(ua);
+    $("#drawerBody").innerHTML=(isInApp()?'<p style="font-size:14px;line-height:1.6"><b>먼저 크롬으로 열어 주세요.</b><br>카톡·네이버 앱 안에서는 추가가 안 돼요. 오른쪽 위(또는 아래) <b>⋮ 메뉴 → ‘다른 브라우저로 열기’</b>를 누르고 크롬을 고른 뒤, 아래 순서대로 해 주세요.</p>':'')+
+      (samsung?'<ol class="ios-steps"><li>화면 아래 <b>≡ 메뉴</b> 누르기</li><li><b>‘현재 페이지 추가’ → ‘홈 화면’</b> 누르기</li><li><b>‘추가’</b> 누르기</li></ol>'
+      :'<ol class="ios-steps"><li>크롬 오른쪽 위 <b>⋮ (점 세 개)</b> 누르기</li><li><b>‘홈 화면에 추가’</b> 또는 <b>‘앱 설치’</b> 누르기</li><li><b>‘설치’</b>(또는 ‘추가’) 누르기</li></ol>')+
+      '<p style="font-size:13px;color:var(--ink-faint);margin-top:12px">홈 화면에 생긴 ☀️ 아이콘으로 열면 앱처럼 쓸 수 있어요.</p>';
+    openDrawer();
   }
   function showIOSGuide(){
     $("#drawerTitle").textContent="홈 화면에 추가하기";
-    var inApp=/KAKAOTALK|NAVER|Instagram|FBAN|FBAV/i.test(navigator.userAgent);
+    var inApp=isInApp();
     $("#drawerBody").innerHTML=(inApp?'<p style="font-size:14px;line-height:1.6"><b>먼저 사파리로 열어 주세요.</b><br>카톡·네이버 앱 안에서는 추가가 안 돼요. 오른쪽 아래(또는 위) 메뉴에서 <b>‘Safari로 열기’</b>를 누른 뒤 아래 순서대로 해 주세요.</p>':'')+
       '<ol class="ios-steps"><li>화면 아래(또는 주소창 옆)의 <b>공유 버튼</b> <span style="font-size:18px">⎋</span> (네모에 위쪽 화살표) 누르기</li><li>목록을 올려서 <b>‘홈 화면에 추가’</b> 누르기</li><li>오른쪽 위 <b>‘추가’</b> 누르기</li></ol><p style="font-size:13px;color:var(--ink-faint);margin-top:12px">홈 화면에 생긴 ☀️ 아이콘으로 열면 앱처럼 쓸 수 있어요.</p>';
     openDrawer();
@@ -768,7 +778,7 @@
   function doInstall(){
     if(deferredPrompt){var p=deferredPrompt;deferredPrompt=null;p.prompt();p.userChoice.then(function(r){if(r&&r.outcome==="accepted")toast("홈 화면에 추가했어요 🎉");updateInstallCard()}).catch(noop);return}
     if(isIOS()){showIOSGuide();return}
-    toast("브라우저 메뉴(⋮)에서 ‘홈 화면에 추가’를 눌러 주세요");
+    showAndroidGuide();
   }
   window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredPrompt=e;updateInstallCard()});
   window.addEventListener("appinstalled",function(){deferredPrompt=null;updateInstallCard()});
