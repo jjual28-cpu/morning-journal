@@ -332,8 +332,9 @@
     </section>
 
     <section class="card set-group">
-      <div class="set-item"><h3>백업</h3><p>앱 데이터를 파일로 내려받거나 복원해요. (앱은 클라우드에도 자동 저장됩니다)</p>
+      <div class="set-item"><h3>백업</h3><p>기록은 이 기기에 저장돼요. 기기를 바꾸거나 앱 주소가 바뀔 때는 백업해서 옮겨 주세요.</p>
         <div class="row2"><button class="mini" id="expJson">💾 JSON 백업</button><button class="mini" id="impJson">📥 불러오기</button><button class="mini" id="expCsv">📄 CSV(가계부)</button></div>
+        <div class="row2"><button class="mini" id="copyBak">📋 백업 복사</button><button class="mini" id="pasteBak">📋 붙여넣어 복원</button></div>
       </div>
       <div class="set-item"><h3>저장 상태</h3><p id="dbStatus">확인 중…</p></div>
     </section>
@@ -652,9 +653,32 @@
     var data={goals:loadGoals(),debts:loadDebts(),settings:loadSettings(),journal:{},expense:{}};
     allJournalDates().forEach(function(k){data.journal[k]=loadEntry(k)});
     allMonths().forEach(function(m){data.expense[m]=loadMonth(m)});
-    dl(JSON.stringify(data,null,2),"미라클모닝_백업_"+todayKey()+".json","application/json");toast("백업을 저장했어요");
+    var text=JSON.stringify(data,null,2),name="미라클모닝_백업_"+todayKey()+".json";
+    shareFile(text,name,"application/json").then(function(ok){
+      if(ok){toast("공유 창에서 ‘파일에 저장’이나 카톡 ‘나와의 채팅’을 골라 주세요");return}
+      dlFallback(text,name,"application/json");toast("다운로드 폴더에 저장을 시도했어요 — 안 보이면 ‘백업 복사’를 눌러 주세요");
+    });
   }
-  function importJson(){var inp=document.createElement("input");inp.type="file";inp.accept=".json,application/json";inp.onchange=function(){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(){try{var d=JSON.parse(r.result);if(d.goals)saveGoals(d.goals);if(d.debts)saveDebts(d.debts);if(d.settings)saveSettings(d.settings);if(d.journal)for(var k in d.journal)saveEntry(k,d.journal[k]);if(d.expense)for(var m in d.expense)saveMonth(m,d.expense[m]);renderGoals();renderEntry();renderBudget();renderDebts();fillSettings();fillDebtInputs();renderLoanEdit();toast("복원했어요")}catch(e){toast("파일을 읽을 수 없어요")}};r.readAsText(f)};inp.click()}
+  // 홈 화면 앱(PWA)에서는 다운로드가 조용히 막히는 경우가 있어 공유 창을 먼저 사용
+  function shareFile(text,name,type){
+    try{
+      var f=new File([text],name,{type:type});
+      if(navigator.canShare&&navigator.canShare({files:[f]}))return navigator.share({files:[f],title:name}).then(function(){return true},function(e){return e&&e.name==="AbortError"?true:false});
+    }catch(e){}
+    return Promise.resolve(false);
+  }
+  function copyBackup(){
+    var data={goals:loadGoals(),debts:loadDebts(),settings:loadSettings(),journal:{},expense:{}};
+    allJournalDates().forEach(function(k){data.journal[k]=loadEntry(k)});
+    allMonths().forEach(function(m){data.expense[m]=loadMonth(m)});
+    copyText(JSON.stringify(data)).then(function(){toast("백업 내용을 복사했어요 — 카톡 ‘나와의 채팅’에 붙여넣어 보관하세요")},function(){toast("복사가 막혔어요")});
+  }
+  function pasteRestore(){
+    var t=prompt("복사해 둔 백업 내용을 붙여넣어 주세요");if(!t)return;
+    try{restoreData(JSON.parse(t))}catch(e){toast("백업 내용이 올바르지 않아요")}
+  }
+  function restoreData(d){if(d.goals)saveGoals(d.goals);if(d.debts)saveDebts(d.debts);if(d.settings)saveSettings(d.settings);var n=0;if(d.journal)for(var k in d.journal){saveEntry(k,d.journal[k]);n++}if(d.expense)for(var m in d.expense)saveMonth(m,d.expense[m]);renderGoals();renderEntry();renderBudget();renderDebts();fillSettings();fillDebtInputs();renderLoanEdit();renderDate();toast("복원했어요 · 저널 "+n+"일치")}
+  function importJson(){var inp=document.createElement("input");inp.type="file";inp.accept=".json,application/json";inp.onchange=function(){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(){try{restoreData(JSON.parse(r.result))}catch(e){toast("파일을 읽을 수 없어요")}};r.readAsText(f)};inp.click()}
   function exportCsv(){var rows=[["날짜","구분","분류","금액","메모"]];allMonths().forEach(function(m){loadMonth(m).forEach(function(it){rows.push([it.date,it.type,it.category,it.amount,(it.memo||"").replace(/[\n\t]/g," ")])})});var csv="﻿"+rows.map(function(r){return r.map(function(c){c=""+(c==null?"":c);return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c}).join(",")}).join("\n");dl(csv,"가계부_"+todayKey()+".csv","text/csv");toast("CSV를 저장했어요")}
   function dl(text,name,type){
     if(window.claude&&claude.use){claude.use("downloads").then(function(d){if(d&&d.save){d.save({filename:name,data:text}).catch(function(){dlFallback(text,name,type)})}else dlFallback(text,name,type)}).catch(function(){dlFallback(text,name,type)})}
@@ -743,7 +767,7 @@
     $("#setDebt").addEventListener("input",function(){var d=loadDebts();d.totalDebt=parseInt((this.value||"").replace(/[^0-9]/g,""),10)||0;saveDebts(d);renderDebts()});
     $("#setFixed").addEventListener("input",function(){var d=loadDebts();d.monthlyFixed=parseInt((this.value||"").replace(/[^0-9]/g,""),10)||0;saveDebts(d);renderDebts()});
     $("#addLoan").onclick=function(){var d=loadDebts();d.loans=d.loans||[];d.loans.push({name:"",balance:0,monthly:0});saveDebts(d);renderLoanEdit()};
-    $("#expJson").onclick=exportJson;$("#impJson").onclick=importJson;$("#expCsv").onclick=exportCsv;
+    $("#expJson").onclick=exportJson;$("#copyBak").onclick=copyBackup;$("#pasteBak").onclick=pasteRestore;$("#impJson").onclick=importJson;$("#expCsv").onclick=exportCsv;
 
     $$("#impSeg button").forEach(function(b){b.onclick=function(){curImp=b.dataset.imp;$$("#impSeg button").forEach(function(x){x.classList.toggle("on",x===b)});impHintText()}});
     $("#impRun").onclick=runImport;$("#impFetch").onclick=fetchFromSheet;impHintText();
