@@ -1,4 +1,4 @@
-var C='mm-v2';
+var C='mm-v3';
 var A=['./','./index.html','./manifest.webmanifest','./icon.svg'];
 self.addEventListener('install',function(e){e.waitUntil(caches.open(C).then(function(c){return c.addAll(A)}).then(function(){return self.skipWaiting()}))});
 self.addEventListener('activate',function(e){e.waitUntil(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){if(k!==C)return caches.delete(k)}))}).then(function(){return self.clients.claim()}))});

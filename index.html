@@ -294,6 +294,7 @@
         <div class="row2" style="justify-content:space-between"><h3>구글시트 자동 기록</h3><span class="pill off" id="sheetPill">미연결</span></div>
         <p>저널은 <b>미라클모닝 시트(시트2)</b>에 날짜순으로, 가계부는 <b>⭐나의가계부⭐의 월별 탭</b>(예: 2026.09) 마지막 기록 아래에 <b>자동으로</b> 들어가요.</p>
         <input class="f" id="sheetUrl" placeholder="Apps Script 웹앱 URL 붙여넣기">
+        <input class="f" id="sheetToken" type="password" autocomplete="off" placeholder="토큰 (스크립트의 APP_TOKEN 값 · 이 기기에만 저장)">
         <div class="row2"><button class="mini accent" id="saveUrl">저장</button><button class="mini" id="testUrl">연결 테스트</button><button class="mini" id="showGuide">설정법 보기</button></div>
         <button class="mini" id="pushAll" style="align-self:flex-start">📤 지금까지 기록 전부 시트로 보내기</button>
         <div id="guideBox" style="display:none;margin-top:8px">
@@ -425,9 +426,14 @@
   function sheetPost(payload){
     var url=(loadSettings().sheetUrl||"").trim();
     if(!url)return Promise.reject(new Error("no-url"));
-    try{return fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)})}catch(e){return Promise.reject(e)}
+    var tk=(loadSettings().sheetToken||"").trim();
+    var body=JSON.stringify(Object.assign({token:tk},payload));
+    return fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:body})
+      .then(function(r){return r.json()})
+      .then(function(d){if(!d||!d.ok)throw new Error((d&&d.error)||"fail");return d});
   }
-  function sheetPostQuiet(payload){sheetPost(payload).catch(noop)}
+  function sheetErrMsg(e){var m=(e&&e.message)||"";return m==="unauthorized"?"토큰이 틀렸어요 — 설정에서 토큰을 확인해 주세요":m==="no-url"?"시트 URL이 없어요":"시트 전송 실패 — 인터넷 연결이나 설정을 확인해 주세요"}
+  function sheetPostQuiet(payload){sheetPost(payload).catch(function(e){toast("⚠️ "+sheetErrMsg(e))})}
   function journalPayload(k,o){
     var d=parseKey(k);var ds=d.getFullYear()+". "+(d.getMonth()+1)+". "+d.getDate();
     var row=[ds];JCOLS.forEach(function(c){row.push(o[c[0]]||"")});
@@ -461,7 +467,8 @@
     var url=(loadSettings().sheetUrl||"").trim();if(!url)return;
     clearTimeout(sheetTimer);
     sheetTimer=setTimeout(function(){
-      sheetPostQuiet(journalPayload(curDate,loadEntry(curDate)));
+      var k=curDate;
+      sheetPost(journalPayload(k,loadEntry(k))).then(function(){if(k===curDate)$("#syncText").textContent="자동 저장됨 · 시트에 기록됨 ✅"}).catch(function(e){if(k===curDate)$("#syncText").textContent="⚠️ 시트 기록 실패";toast("⚠️ "+sheetErrMsg(e))});
     },3500);
   }
 
@@ -629,8 +636,8 @@
 "  }catch(err){ out.error=String(err); }",
 "  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);",
 "}"].join("\n");
-  function fillSettings(){$("#sheetUrl").value=loadSettings().sheetUrl||"";updateSheetPill()}
-  function updateSheetPill(){var on=!!(loadSettings().sheetUrl||"").trim();var p=$("#sheetPill");p.textContent=on?"연결됨":"미연결";p.className="pill "+(on?"ok":"off")}
+  function fillSettings(){var st=loadSettings();$("#sheetUrl").value=st.sheetUrl||"";$("#sheetToken").value=st.sheetToken||"";updateSheetPill()}
+  function updateSheetPill(){var st=loadSettings();var on=!!(st.sheetUrl||"").trim(),tk=!!(st.sheetToken||"").trim();var p=$("#sheetPill");p.textContent=on?(tk?"연결됨":"토큰 필요"):"미연결";p.className="pill "+(on&&tk?"ok":"off")}
   function fillDebtInputs(){var d=loadDebts();$("#setDebt").value=d.totalDebt||"";$("#setFixed").value=d.monthlyFixed||""}
   function renderLoanEdit(){
     var d=loadDebts();var box=$("#loanEdit");var loans=d.loans||[];
@@ -674,7 +681,13 @@
   function importJournalRows(rows){var keys=["g1","g2","g3","idea","today","tomorrow","learned","discomfort"];var n=0;rows.forEach(function(r){var d=parseDate(r[0]);if(!d)return;var o={};for(var i=0;i<keys.length;i++){o[keys[i]]=(r[i+1]!=null?(""+r[i+1]).trim():"")}if(hasContent(o)){saveEntry(d,o);n++}});return n}
   function importExpenseRows(rows){var byM={},n=0;rows.forEach(function(r){var d=parseDate(r[0]);if(!d)return;var amt=parseInt((""+(r[3]!=null?r[3]:"")).replace(/[^0-9]/g,""),10);if(!amt)return;var type=(""+(r[1]||"")).indexOf("수입")>=0?"수입":"지출";var cat=((r[2]!=null?(""+r[2]).trim():"")||"기타");var memo=(r[4]!=null?(""+r[4]).trim():"");var ym=d.slice(0,7);if(!byM[ym])byM[ym]=loadMonth(ym);byM[ym].push({id:uid(),date:d,type:type,category:cat,amount:amt,memo:memo});n++});for(var ym in byM)saveMonth(ym,byM[ym]);return n}
   function runImport(){var rows=parseTable($("#impBox").value);if(!rows.length){toast("붙여넣은 내용이 없어요");return}var n=curImp==="journal"?importJournalRows(rows):importExpenseRows(rows);$("#impBox").value="";renderEntry();renderDate();renderBudget();toast(n?((curImp==="journal"?"저널 ":"가계부 ")+n+"건 가져왔어요"):"가져올 유효한 행이 없어요 (날짜/금액 확인)")}
-  function fetchFromSheet(){var url=(loadSettings().sheetUrl||"").trim();if(!url){toast("먼저 위에서 시트 URL을 저장하세요");return}toast("불러오는 중…");fetch(url,{method:"GET"}).then(function(r){return r.json()}).then(function(d){var jn=d.journal?importJournalRows(d.journal):0;var en=d.expense?importExpenseRows(d.expense):0;renderEntry();renderDate();renderBudget();toast("불러왔어요 · 저널 "+jn+"건, 가계부 "+en+"건")}).catch(function(){toast("직접 불러오기는 브라우저 보안으로 막혔어요 — 붙여넣기 방식으로 가져와 주세요")})}
+  function fetchFromSheet(){var st=loadSettings(),url=(st.sheetUrl||"").trim(),tk=(st.sheetToken||"").trim();if(!url){toast("먼저 위에서 시트 URL을 저장하세요");return}toast("불러오는 중…");
+    var q=tk?(url+(url.indexOf("?")<0?"?":"&")+"token="+encodeURIComponent(tk)+"&kind=journal_list"):url;
+    fetch(q,{method:"GET"}).then(function(r){return r.json()}).then(function(d){
+      if(d&&d.ok===false)throw new Error(d.error||"fail");
+      var rows=d.journal||(d.items?d.items.map(function(it){return [it.date].concat(JCOLS.map(function(c){return it[c[0]]||""}))}):null);
+      var jn=rows?importJournalRows(rows):0;var en=d.expense?importExpenseRows(d.expense):0;renderEntry();renderDate();renderBudget();toast("불러왔어요 · 저널 "+jn+"건, 가계부 "+en+"건")
+    }).catch(function(e){toast((e&&e.message==="unauthorized")?"⚠️ 토큰이 틀렸어요":"직접 불러오기가 막혔어요 — 붙여넣기 방식으로 가져와 주세요")})}
 
   // ---------- history drawer ----------
   function openDrawer(){$("#scrim").classList.add("show");$("#drawer").classList.add("show")}
@@ -722,8 +735,8 @@
     $("#amtIn").addEventListener("keydown",function(e){if(e.key==="Enter")addExp()});
 
     // settings
-    $("#saveUrl").onclick=function(){var s=loadSettings();s.sheetUrl=($("#sheetUrl").value||"").trim();saveSettings(s);updateSheetPill();toast(s.sheetUrl?"저장했어요 · 이제 자동 기록돼요":"URL을 비웠어요")};
-    $("#testUrl").onclick=function(){if(!(loadSettings().sheetUrl||"").trim()){toast("먼저 URL을 저장해주세요");return}sheetPost({kind:"ping"}).then(function(){toast("✅ 연결 OK — 두 시트 모두 접근돼요 (테스트는 시트에 아무것도 쓰지 않아요)")}).catch(function(){toast("⚠️ 전송이 막혔어요 — URL(…/exec)과 배포 권한 ‘모든 사용자’를 확인하세요")})};
+    $("#saveUrl").onclick=function(){var s=loadSettings();s.sheetUrl=($("#sheetUrl").value||"").trim();s.sheetToken=($("#sheetToken").value||"").trim();saveSettings(s);updateSheetPill();toast(s.sheetUrl?"저장했어요 · 이제 자동 기록돼요":"URL을 비웠어요")};
+    $("#testUrl").onclick=function(){if(!(loadSettings().sheetUrl||"").trim()){toast("먼저 URL을 저장해주세요");return}sheetPost({kind:"ping"}).then(function(){toast("✅ 연결 OK — 두 시트 모두 접근돼요 (테스트는 시트에 아무것도 쓰지 않아요)")}).catch(function(e){toast("⚠️ "+sheetErrMsg(e))})};
     $("#pushAll").onclick=pushAllToSheet;
     $("#showGuide").onclick=function(){var g=$("#guideBox");g.style.display=g.style.display==="none"?"block":"none"};
     $("#copyScript").onclick=function(){copyText(SCRIPT_CODE).then(function(){toast("스크립트를 복사했어요")}).catch(function(){toast("복사 실패 — 아래 코드를 길게 눌러 복사하세요")})};
