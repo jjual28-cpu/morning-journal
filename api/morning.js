@@ -1,10 +1,26 @@
 // 아침 알림 보내기 — 구글 스크립트의 매일 아침 트리거(morningPush)가 호출함.
 // 토큰(t)은 여기 저장하지 않고 그대로 스크립트에 넘겨 확인받는다.
 // ?only=<endpoint> 를 붙이면 그 기기에만 테스트 알림을 보낸다.
+// 스크립트 트리거는 15분마다 호출하고, 각 기기가 정한 시간(time, 15분 단위)이 든 구간에만 보낸다.
 const webpush = require("web-push");
 
 const SCRIPT_URL = process.env.SCRIPT_URL;
 const APP_URL = "https://jjual-miracle-morning.vercel.app";
+const SLOT = 15;
+
+// 그 기기 시간대 기준 현재 시각을 15분 구간 시작(분)으로
+function nowSlot(tz) {
+  let p;
+  try { p = new Intl.DateTimeFormat("en-GB", { timeZone: tz || "Asia/Seoul", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date()); }
+  catch (e) { p = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date()); }
+  const h = +p.find((x) => x.type === "hour").value, m = +p.find((x) => x.type === "minute").value;
+  return Math.floor((h * 60 + m) / SLOT) * SLOT;
+}
+function subSlot(s) {
+  const m = String(s.time || "06:00").match(/^(\d{1,2}):(\d{2})$/);
+  const min = m ? +m[1] * 60 + +m[2] : 360;
+  return Math.floor(min / SLOT) * SLOT;
+}
 
 module.exports = async (req, res) => {
   const t = String((req.query && req.query.t) || "");
@@ -18,6 +34,7 @@ module.exports = async (req, res) => {
   webpush.setVapidDetails(APP_URL, process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
   let subs = j.subs || [];
   if (only) subs = subs.filter((s) => s.endpoint === only);
+  else subs = subs.filter((s) => subSlot(s) === nowSlot(s.tz));
 
   const payload = JSON.stringify({
     title: only ? "🔔 테스트 알림" : "☀️ 좋은 아침이에요",
@@ -28,7 +45,7 @@ module.exports = async (req, res) => {
   let sent = 0;
   const gone = [];
   await Promise.all(subs.map((s) =>
-    webpush.sendNotification(s, payload, { TTL: 3600 })
+    webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload, { TTL: 3600 })
       .then(() => { sent++; })
       .catch((e) => { if (e.statusCode === 404 || e.statusCode === 410) gone.push(s.endpoint); })
   ));
