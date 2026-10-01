@@ -104,6 +104,8 @@
   .label .hint{font-size:12px;color:var(--ink-faint);font-weight:500}
   textarea,input.g,input.f,select.f{width:100%;border:1px solid var(--line);border-radius:14px;background:var(--card-2);color:var(--ink);font:inherit;font-size:16px;line-height:1.55;padding:13px 14px;resize:none;transition:border-color .15s, box-shadow .15s}
   textarea{min-height:calc(1.55em + 28px)}
+  /* 지원하는 브라우저는 글 길이에 맞춰 칸 높이를 스스로 조절 */
+  @supports (field-sizing: content){textarea.entry,textarea.goal{field-sizing:content;height:auto!important}}
   textarea::placeholder,input::placeholder{color:var(--ink-faint);opacity:.85}
   textarea:focus,input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent)}
   .section{padding:18px}
@@ -352,7 +354,7 @@
         <div class="row2"><button class="mini" id="copyBak">📋 백업 복사</button><button class="mini" id="pasteBak">📋 붙여넣어 복원</button></div>
       </div>
       <div class="set-item"><h3>홈 화면에 추가</h3><p>아이콘을 홈 화면에 두고 앱처럼 열어요.</p><button class="mini" id="installBtn2" style="align-self:flex-start">📲 홈 화면에 추가</button></div>
-      <div class="set-item"><h3>저장 상태</h3><p id="dbStatus">확인 중…</p></div>
+      <div class="set-item"><h3>저장 상태</h3><p id="dbStatus">확인 중…</p><p style="font-size:12px;color:var(--ink-faint);margin:6px 0 0">앱 버전 v8</p></div>
     </section>
   </main></div>
 </section>
@@ -490,7 +492,8 @@
   }
 
   // ---------- Journal ----------
-  function autogrow(t){if(!t.offsetParent)return;t.style.height="auto";t.style.height=(t.scrollHeight+2)+"px"}
+  var NATIVE_GROW=!!(window.CSS&&CSS.supports&&CSS.supports("field-sizing","content"));
+  function autogrow(t){if(NATIVE_GROW||!t.offsetParent)return;t.style.height="auto";t.style.height=(t.scrollHeight+2)+"px"}
   // 숨겨진 화면에서는 높이를 잴 수 없어서, 화면이 보일 때 다시 맞춤
   function regrowAll(){$$("textarea.entry,textarea.goal").forEach(autogrow)}
   function streakCount(){var d=new Date();var n=0;if(!LS.getItem("mm.journal."+keyOf(d)))d.setDate(d.getDate()-1);while(LS.getItem("mm.journal."+keyOf(d))){n++;d.setDate(d.getDate()-1)}return n}
@@ -835,6 +838,6 @@
 })();
 </script>
 
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').then(function(r){r.update()}).catch(function(){})})}</script>
 </body>
 </html>
