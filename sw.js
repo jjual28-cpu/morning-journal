@@ -1,4 +1,4 @@
-var C='mm-v8';
+var C='mm-v9';
 var A=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-180.png'];
 self.addEventListener('install',function(e){e.waitUntil(caches.open(C).then(function(c){return c.addAll(A)}).then(function(){return self.skipWaiting()}))});
 self.addEventListener('activate',function(e){e.waitUntil(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){if(k!==C)return caches.delete(k)}))}).then(function(){return self.clients.claim()}))});
@@ -11,4 +11,13 @@ self.addEventListener('fetch',function(e){
     return;
   }
   e.respondWith(caches.match(e.request).then(function(r){return r||fetch(e.request).then(function(res){var cp=res.clone();caches.open(C).then(function(c){c.put(e.request,cp)});return res})}));
+});
+self.addEventListener('push',function(e){
+  var d={};try{d=e.data?e.data.json():{}}catch(x){d={body:e.data&&e.data.text()}}
+  e.waitUntil(self.registration.showNotification(d.title||'☀️ 좋은 아침이에요',{body:d.body||'',icon:'icon-192.png',badge:'icon-192.png',data:{url:d.url||'./'},tag:'morning'}));
+});
+self.addEventListener('notificationclick',function(e){
+  e.notification.close();
+  var url=(e.notification.data&&e.notification.data.url)||'./';
+  e.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(function(cs){for(var i=0;i<cs.length;i++){if('focus' in cs[i])return cs[i].focus()}return clients.openWindow(url)}));
 });
