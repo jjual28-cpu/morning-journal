@@ -1,0 +1,5 @@
+{
+  "functions": {
+    "api/morning.js": { "maxDuration": 30 }
+  }
+}
